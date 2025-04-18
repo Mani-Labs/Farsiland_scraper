@@ -1,12 +1,6 @@
 # File: farsiland_scraper/items.py
-# Version: 2.0.0
-# Last Updated: 2025-04-19 15:00
-#
-# Changelog:
-# - Added detailed docstrings for all item classes and fields
-# - Ensured consistent field types with appropriate comments
-# - Clarified relationships between item types
-# - Added TypeHints for serializer functions
+# Version: 2.3.0
+# Last Updated: 2025-05-01 15:30
 
 import scrapy
 from typing import Dict, List, Union, Optional, Any, cast
@@ -52,63 +46,25 @@ class ShowItem(scrapy.Item):
     # Season data
     seasons = scrapy.Field()  # List of season data (can contain SeasonItem objects)
     
-    # Flags
+    # Episode URL tracking (for cross-reference)
+    episode_urls = scrapy.Field()  # List of episode URLs discovered in this show
+    
+    # Flags and timestamps
     is_new = scrapy.Field(serializer=bool)  # Whether this is a new or updated item
+    last_scraped = scrapy.Field(serializer=str)  # Timestamp when the item was last scraped
+    cached_at = scrapy.Field(serializer=str)  # Timestamp when the item was cached
+    source = scrapy.Field(serializer=str)  # Source of the data
 
-class SeasonItem(scrapy.Item):
-    """
-    Item representing a season of a TV show.
-    
-    A season belongs to a show and contains multiple episodes.
-    Relationships:
-    - Parent: ShowItem (one-to-many)
-    - Children: EpisodeItem (one-to-many)
-    """
-    show_url = scrapy.Field(serializer=str)  # Foreign key to ShowItem.url
-    season_number = scrapy.Field(serializer=int)  # Season number (1, 2, 3, etc.)
-    episodes = scrapy.Field()  # List of episode data (can contain EpisodeItem objects)
-
-class EpisodeItem(scrapy.Item):
-    """
-    Item representing a TV show episode.
-    
-    An episode belongs to a show and a specific season.
-    Relationships:
-    - Parent: ShowItem (many-to-one)
-    - Parent: SeasonItem (many-to-one)
-    """
-    # Identifiers
-    url = scrapy.Field(serializer=str)  # Primary key, unique URL of the episode
-    sitemap_url = scrapy.Field(serializer=str)  # URL in sitemap
-    lastmod = scrapy.Field(serializer=str)  # Last modification timestamp from sitemap
-    
-    # Relationships
-    show_url = scrapy.Field(serializer=str)  # Foreign key to ShowItem.url
-    season_number = scrapy.Field(serializer=int)  # Season number
-    episode_number = scrapy.Field(serializer=int)  # Episode number within the season
-    
-    # Metadata
-    title = scrapy.Field(serializer=str)  # Episode title
-    air_date = scrapy.Field(serializer=str)  # Original air date
-    thumbnail = scrapy.Field(serializer=str)  # URL to episode thumbnail
-    
-    # Content
-    video_files = scrapy.Field()  # List of VideoFileItem objects
-    
-    # Flags
-    is_new = scrapy.Field(serializer=bool)  # Whether this is a new or updated item
 
 class MovieItem(scrapy.Item):
     """
     Item representing a movie.
     
-    A movie is a standalone item with no parent-child relationships.
-    Related items:
-    - VideoFileItem: Contains video file information (embedded)
+    A movie contains metadata about a standalone film.
     """
     # Identifiers
     url = scrapy.Field(serializer=str)  # Primary key, unique URL of the movie
-    sitemap_url = scrapy.Field(serializer=str)  # URL in sitemap
+    sitemap_url = scrapy.Field(serializer=str)  # URL in sitemap (can be different from url)
     lastmod = scrapy.Field(serializer=str)  # Last modification timestamp from sitemap
     
     # Basic metadata
@@ -116,8 +72,8 @@ class MovieItem(scrapy.Item):
     title_fa = scrapy.Field(serializer=str)  # Farsi title
     poster = scrapy.Field(serializer=str)  # URL to poster image
     description = scrapy.Field(serializer=str)  # Movie description/synopsis
-    release_date = scrapy.Field(serializer=str)  # Release date string
-    year = scrapy.Field(serializer=int)  # Release year as integer
+    release_date = scrapy.Field(serializer=str)  # Release date
+    year = scrapy.Field(serializer=int)  # Release year
     
     # Ratings
     rating = scrapy.Field(serializer=float)  # Average rating (0-10)
@@ -132,20 +88,58 @@ class MovieItem(scrapy.Item):
     social_shares = scrapy.Field(serializer=int)  # Number of social media shares
     comments_count = scrapy.Field(serializer=int)  # Number of comments
     
-    # Content
-    video_files = scrapy.Field()  # List of VideoFileItem objects
+    # Video files
+    video_files = scrapy.Field()  # List of video files (VideoFileItem objects)
     
-    # Flags
+    # Flags and timestamps
+    is_new = scrapy.Field(serializer=int)  # Whether this is a new or updated item (using int for DB compatibility)
+    last_scraped = scrapy.Field(serializer=str)  # Timestamp when the item was last scraped
+    cached_at = scrapy.Field(serializer=str)  # Timestamp when the item was cached
+    source = scrapy.Field(serializer=str)  # Source of the data
+
+
+class EpisodeItem(scrapy.Item):
+    """
+    Item representing a TV show episode.
+    
+    An episode belongs to a TV show and contains metadata and video links.
+    """
+    # Identifiers
+    url = scrapy.Field(serializer=str)  # Primary key, unique URL of the episode
+    sitemap_url = scrapy.Field(serializer=str)  # URL in sitemap
+    lastmod = scrapy.Field(serializer=str)  # Last modification timestamp from sitemap
+    
+    # Relationship
+    show_url = scrapy.Field(serializer=str)  # URL of the parent show
+    
+    # Episode metadata
+    season_number = scrapy.Field(serializer=int)  # Season number
+    episode_number = scrapy.Field(serializer=int)  # Episode number within the season
+    title = scrapy.Field(serializer=str)  # Episode title
+    air_date = scrapy.Field(serializer=str)  # Air date
+    thumbnail = scrapy.Field(serializer=str)  # Thumbnail image URL
+    
+    # Video files
+    video_files = scrapy.Field()  # List of video files (VideoFileItem objects)
+    
+    # Flags and timestamps
     is_new = scrapy.Field(serializer=bool)  # Whether this is a new or updated item
+    last_scraped = scrapy.Field(serializer=str)  # Timestamp when the item was last scraped
+    cached_at = scrapy.Field(serializer=str)  # Timestamp when the item was cached
+    source = scrapy.Field(serializer=str)  # Source of the data
+
 
 class VideoFileItem(scrapy.Item):
     """
     Item representing a video file.
     
-    Video files are associated with movies or episodes.
-    This is typically embedded within MovieItem or EpisodeItem.
+    A video file contains information about a playable media file, including
+    its quality, URL, and other metadata.
     """
-    quality = scrapy.Field(serializer=str)  # Video quality (e.g., "720p", "1080p")
-    url = scrapy.Field(serializer=str)  # Primary URL to the video file
-    mirror_url = scrapy.Field(serializer=str)  # Alternative URL (backup)
+    # Metadata
+    quality = scrapy.Field(serializer=str)  # Quality label (e.g., "720", "1080")
     size = scrapy.Field(serializer=str)  # File size (e.g., "1.2 GB")
+    
+    # URLs
+    url = scrapy.Field(serializer=str)  # Primary download URL
+    mirror_url = scrapy.Field(serializer=str)  # Mirror/alternate download URL

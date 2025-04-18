@@ -1,6 +1,6 @@
 # File: farsiland_scraper/spiders/series_spider.py
-# Version: 6.0.0
-# Last Updated: 2025-05-01 10:00
+# Version: 6.0.1
+# Last Updated: 2025-05-01 11:15
 
 """
 Spider for scraping TV show/series metadata from Farsiland.
@@ -9,15 +9,6 @@ This spider:
 1. Extracts series metadata (title, poster, season count, episode links, etc.)
 2. Discovers episode URLs but does not process them (left to episodes_spider.py)
 3. Handles pagination and sitemap-based URL discovery
-
-Changelog:
-- [6.0.0] Complete rewrite with architectural improvements
-- [6.0.0] Changed to focus only on series metadata and episode URL discovery
-- [6.0.0] Removed duplicate episode parsing (now handled by episodes_spider)
-- [6.0.0] Improved season and episode URL extraction 
-- [6.0.0] Standardized logging with proper context
-- [6.0.0] Added comprehensive error handling for all extraction stages
-- [5.1.0] Ensured compatibility with naming scheme ('series' spider, 'shows' export)
 """
 
 import scrapy
@@ -224,7 +215,8 @@ class SeriesSpider(scrapy.Spider):
             genres=[],
             directors=[],
             cast=[],
-            seasons=[]
+            seasons=[],
+            episode_urls=[]
         )
     
     def _extract_title(self, show: ShowItem, soup: BeautifulSoup) -> None:
@@ -590,6 +582,10 @@ class SeriesSpider(scrapy.Spider):
                     except Exception as e:
                         LOGGER.warning(f"Error processing episode in season {season_number}: {e}")
                 
+                # Skip empty seasons
+                if not season_episodes:
+                    continue
+                    
                 # Sort episodes by number
                 season_episodes.sort(key=lambda ep: ep.get('episode_number', 0))
                 
@@ -606,23 +602,34 @@ class SeriesSpider(scrapy.Spider):
             # Sort seasons by number
             seasons.sort(key=lambda s: s.get('season_number', 0))
             
+            # If no seasons found from structured layout, create a default season
+            if not seasons and episode_urls:
+                # Create a default season with all found episodes
+                default_season = {
+                    "season_number": 1,
+                    "title": "Season 1",
+                    "episode_count": len(episode_urls),
+                    "episodes": [{"url": url} for url in episode_urls]
+                }
+                seasons.append(default_season)
+            
             # Update show with season and episode data
             show['seasons'] = seasons
             show['season_count'] = len(seasons)
             show['episode_count'] = total_episode_count
             
-            # Add all episode URLs as a list field (not part of the standard ShowItem)
-            # This is just for demonstration - in practice, these URLs can be
-            # extracted from the 'seasons' field or handled separately
+            # Store all unique episode URLs
             show['episode_urls'] = list(episode_urls)
             
             LOGGER.info(f"Extracted {len(seasons)} seasons with {total_episode_count} episodes")
                 
         except Exception as e:
             LOGGER.error(f"Error extracting seasons and episodes: {e}", exc_info=True)
+            # Ensure we at least have empty lists to avoid further errors
             show['seasons'] = []
             show['season_count'] = 0
             show['episode_count'] = 0
+            show['episode_urls'] = []
     
     def _log_extraction_result(self, show: ShowItem) -> None:
         """

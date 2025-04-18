@@ -362,7 +362,7 @@ class Database:
             data = {
                 "metadata": {
                     "exported_at": datetime.datetime.now().isoformat(),
-                    "version": "3.4.0"
+                    "version": "3.5.0"
                 }
             }
 
@@ -375,20 +375,28 @@ class Database:
             data['movies'] = self._load_table_with_json_fields('movies', ['genres', 'directors', 'cast', 'video_files'])
             all_episodes = self._load_table_with_json_fields('episodes', ['video_files'])
 
-            # Organize episodes by show
-            show_map = {}
+            # Create a lookup map for episodes by show_url
+            show_episodes_map = {}
             for ep in all_episodes:
                 show_url = ep.get('show_url')
                 if show_url:
-                    if show_url not in show_map:
-                        show_map[show_url] = []
-                    show_map[show_url].append(ep)
+                    # Standardize URLs for consistent matching
+                    show_url = show_url.rstrip('/')
+                    if show_url not in show_episodes_map:
+                        show_episodes_map[show_url] = []
+                    show_episodes_map[show_url].append(ep)
 
             # Process shows and add related episodes
             shows = self._load_table_with_json_fields('shows', ['genres', 'directors', 'cast', 'seasons'])
             for show in shows:
-                # Get related episodes for this show
-                related_eps = show_map.get(show.get('url', ''), [])
+                # Standardize URL for matching
+                show_url = show.get('url', '').rstrip('/')
+                
+                # Get episodes for this show
+                related_eps = show_episodes_map.get(show_url, [])
+                
+                # Log relationship info for debugging
+                LOGGER.debug(f"Show: {show.get('title_en')} ({show_url}) has {len(related_eps)} related episodes")
                 
                 # Organize episodes by season
                 seasons_map = {}
@@ -397,7 +405,7 @@ class Database:
                     if season_num not in seasons_map:
                         seasons_map[season_num] = []
                     seasons_map[season_num].append(ep)
-
+                    
                 # Format seasons data
                 final_seasons = []
                 for season_num in sorted(seasons_map.keys()):
@@ -423,7 +431,18 @@ class Database:
                         "episode_count": len(final_episodes),
                         "episodes": final_episodes
                     })
-                    
+                
+                # If no seasons were created but we have original seasons data, try to use it
+                if not final_seasons and show.get('seasons'):
+                    try:
+                        # If this is a string, parse it as JSON
+                        if isinstance(show['seasons'], str):
+                            seasons_data = json.loads(show['seasons'])
+                            final_seasons = seasons_data
+                            LOGGER.debug(f"Using original seasons JSON data for {show.get('title_en')}")
+                    except (json.JSONDecodeError, TypeError) as e:
+                        LOGGER.warning(f"Failed to parse original seasons data for {show.get('title_en')}: {e}")
+                
                 # Assign processed data to the show
                 show['seasons'] = final_seasons
                 show['full_episodes'] = related_eps
@@ -466,7 +485,8 @@ class Database:
                 for field in json_fields:
                     if field in row_dict and row_dict[field]:
                         try:
-                            row_dict[field] = json.loads(row_dict[field])
+                            if isinstance(row_dict[field], str):
+                                row_dict[field] = json.loads(row_dict[field])
                         except json.JSONDecodeError:
                             LOGGER.warning(f"Failed to parse JSON in {field} for {table} {row_dict.get('url', row_dict.get('id'))}")
                             row_dict[field] = []

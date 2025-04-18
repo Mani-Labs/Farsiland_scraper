@@ -252,6 +252,9 @@ class ScrapeManager:
             LOGGER.error(f"Sitemap file not found: {sitemap_path}")
             if self.args.update_sitemap:
                 try:
+                    # Ensure the directory exists
+                    os.makedirs(os.path.dirname(sitemap_path), exist_ok=True)
+                    
                     LOGGER.info("Updating sitemap data...")
                     parser = SitemapParser(output_file=sitemap_path)
                     if parser.run():

@@ -8,7 +8,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 # Project base directories - using pathlib for cross-platform compatibility
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get('FARSILAND_DATA_DIR', BASE_DIR / "data"))
 LOG_DIR = Path(os.environ.get('FARSILAND_LOG_DIR', BASE_DIR / "logs"))
 CACHE_DIR = Path(os.environ.get('FARSILAND_CACHE_DIR', BASE_DIR / "cache"))
